@@ -1,7 +1,7 @@
 # Black-Scholes Option Pricing Engine
 
 > Analytical pricing of European options with full Greeks computation and Monte Carlo validation.
-For my first quantitative finance project, I decided to start from the ground up by implementing the Black-Scholes model from scratch — the cornerstone of derivatives pricing. Rather than using existing libraries, everything is built manually : closed-form pricing, all five Greeks, and a Monte Carlo simulation to validate the analytical results numerically. A foundation before moving on to portfolio optimization and volatility modeling.
+For my first quantitative finance project, I decided to start from the ground up by implementing the Black-Scholes model from scratch, the cornerstone of derivatives pricing. Rather than using existing libraries, everything is built manually : closed-form pricing, all five Greeks, and a Monte Carlo simulation to validate the analytical results numerically. A foundation before moving on to portfolio optimization and volatility modeling.
 ---
 
 ## Overview
