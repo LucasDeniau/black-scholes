@@ -1,84 +1,106 @@
 # Black-Scholes Option Pricing Engine
 
-> Analytical pricing of European options with full Greeks computation and Monte Carlo validation.
-For my first quantitative finance project, I decided to start from the ground up by implementing the Black-Scholes model from scratch, the cornerstone of derivatives pricing. Rather than using existing libraries, everything is built manually : closed-form pricing, all five Greeks, and a Monte Carlo simulation to validate the analytical results numerically. A foundation before moving on to portfolio optimization and volatility modeling.
+> Analytical pricing of European options with full Greeks, numerical validation, and Monte Carlo pricing with variance reduction.
+
 ---
 
 ## Overview
 
-This project implements the **Black-Scholes model** from scratch in Python for pricing
-European call and put options. It computes all five option sensitivities (Greeks) via
-closed-form formulas, and validates results numerically using **Monte Carlo simulation**
-over 100,000 paths.
+For my first quantitative finance project, I implemented the Black-Scholes model from scratch in Python, the cornerstone of derivatives pricing. Everything is built manually: closed-form pricing of European calls and puts, the five Greeks, and a Monte Carlo engine with variance reduction techniques.
 
-Built as part of a quantitative finance portfolio targeting derivatives pricing and
-risk management.
+Every result is cross-checked: put-call parity, finite-difference Greeks, and Monte Carlo confidence intervals against the analytical prices.
 
 ---
 
 ## Theory
 
-### Black-Scholes Formula
+### Model
 
-Under the assumption that the underlying follows a **Geometric Brownian Motion** :
+Under the risk-neutral measure, the underlying follows a **Geometric Brownian Motion**:
 
 $$S_T = S_0 \cdot \exp\left(\left(r - \frac{\sigma^2}{2}\right)T + \sigma\sqrt{T}\,Z\right), \quad Z \sim \mathcal{N}(0,1)$$
 
-The fair price of a European call is given by :
+Because the option can be replicated by a continuously rebalanced portfolio of the underlying and cash, its price does not depend on the expected return of the stock: it is the discounted expected payoff under the risk-neutral measure.
 
-$$C = S \cdot N(d_1) - K \cdot e^{-rT} \cdot N(d_2)$$
+### Black-Scholes Formula
+
+$$C = S \cdot N(d_1) - K e^{-rT} N(d_2), \qquad P = K e^{-rT} N(-d_2) - S \cdot N(-d_1)$$
 
 $$d_1 = \frac{\ln(S/K) + (r + \sigma^2/2)\,T}{\sigma\sqrt{T}}, \qquad d_2 = d_1 - \sigma\sqrt{T}$$
 
-And the put price follows from **put-call parity** :
+$N(d_2)$ is the risk-neutral probability that the call ends in the money, and $N(d_1)$ is the call delta.
 
-$$P = C - S + K \cdot e^{-rT}$$
+Prices satisfy **put-call parity**: $C - P = S - K e^{-rT}$.
 
 ### Greeks
 
-| Greek | Measures sensitivity to | Formula (call) |
-|-------|--------------------------|----------------|
-| **Δ Delta** | Underlying price S | N(d₁) |
-| **Γ Gamma** | Rate of change of Delta | N'(d₁) / (S·σ·√T) |
-| **Θ Theta** | Time decay (per day) | [−S·N'(d₁)·σ/(2√T) − r·K·e^(−rT)·N(d₂)] / 365 |
-| **V Vega** | Volatility σ (per +1%) | S·N'(d₁)·√T / 100 |
-| **ρ Rho** | Interest rate r (per +1%) | K·T·e^(−rT)·N(d₂) / 100 |
+| Greek       | Measures sensitivity to   | Formula (call)                                    |
+|-------------|---------------------------|---------------------------------------------------|
+| **Δ Delta** | Underlying price S        | N(d₁)                                             |
+| **Γ Gamma** | Rate of change of Delta   | N'(d₁) / (S·σ·√T)                                 |
+| **Θ Theta** | Time decay (per day)      | [−S·N'(d₁)·σ/(2√T) − r·K·e^(−rT)·N(d₂)] / 365     |
+| **V Vega**  | Volatility σ (per +1 pt)  | S·N'(d₁)·√T / 100                                 |
+| **ρ Rho**   | Interest rate r (per +1 pt)| K·T·e^(−rT)·N(d₂) / 100                          |
 
-### Monte Carlo Validation
+The Greeks are linked by the Black-Scholes PDE: $\Theta + \frac{1}{2}\sigma^2 S^2 \Gamma + rS\Delta - rC = 0$ — a long-gamma position pays for its convexity through time decay.
 
-The same price can be estimated by simulating N paths of the underlying and
-averaging discounted payoffs :
+### Monte Carlo & Variance Reduction
+
+The price is estimated by averaging discounted payoffs over N simulated values of $S_T$:
 
 $$\hat{C} = e^{-rT} \cdot \frac{1}{N}\sum_{i=1}^{N} \max(S_T^{(i)} - K,\ 0)$$
 
-Convergence to the analytical price is guaranteed by the **Law of Large Numbers**.
-A 95% confidence interval is reported alongside each estimate.
+By the Central Limit Theorem, the standard error decreases as $O(1/\sqrt{N})$, and a 95% confidence interval is $\hat{C} \pm 1.96 \cdot \text{SE}$. Two variance reduction techniques are implemented:
+
+- **Antithetic variates**: each draw $Z$ is paired with $-Z$, which induces negative correlation between paired payoffs.
+- **Control variate**: $X = e^{-rT} S_T$ has a known expectation $S_0$; the estimator $\bar{Y} - b(\bar{X} - S_0)$, with optimal $b = \text{Cov}(Y,X)/\text{Var}(X)$, removes the part of the noise explained by the underlying.
 
 ---
 
 ## Results
 
-Parameters used : **S = 100, K = 100, T = 1y, r = 5%, σ = 20%**
+Parameters: **S = 100, K = 100, T = 1y, r = 5%, σ = 20%**
 
-### Pricing
+### Analytical Prices
 
-| Method | Call | Put |
-|--------|------|-----|
-| Black-Scholes (analytical) | **10.4506** | **5.5735** |
-| Monte Carlo (100k paths) | 10.4398 | 5.5640 |
-| Absolute error | 0.0108 | 0.0095 |
+| Option | Price       |
+|--------|-------------|
+| Call   | **10.4506** |
+| Put    | **5.5735**  |
 
-Monte Carlo error < 0.1% — consistent with the theoretical convergence rate of O(1/√N).
+Put-call parity check: $C - P = S - Ke^{-rT} = 4.877058$ (difference < $10^{-10}$).
 
 ### Greeks
 
-| Greek | Call | Put | Interpretation |
-|-------|------|-----|----------------|
-| **Delta** | +0.6368 | −0.3632 | Call gains 0.64€ per +1€ on the underlying |
-| **Gamma** | 0.0188 | 0.0188 | Delta increases by 0.019 per +1€ on S |
-| **Theta** | −0.0152 | −0.0065 | Call loses 1.5 cents per day (time decay) |
-| **Vega** | +0.3752 | +0.3752 | Both gain 0.38€ per +1% volatility |
-| **Rho** | +0.5323 | −0.4143 | Call gains 0.53€ per +1% interest rate |
+| Greek     | Call    | Put     | Interpretation                                   |
+|-----------|---------|---------|--------------------------------------------------|
+| **Delta** | +0.6368 | −0.3632 | Call gains ≈ 0.64 per +1 on the underlying       |
+| **Gamma** | 0.0188  | 0.0188  | Delta increases by ≈ 0.019 per +1 on S           |
+| **Theta** | −0.0176 | −0.0045 | Call loses ≈ 1.8 cents per day (time decay)      |
+| **Vega**  | +0.3752 | +0.3752 | Both gain ≈ 0.38 per +1 volatility point         |
+| **Rho**   | +0.5323 | −0.4189 | Call gains ≈ 0.53 per +1 interest rate point     |
+
+All closed-form Greeks match central finite-difference approximations to 4 decimal places.
+
+### Monte Carlo (100,000 paths)
+
+**Call** (exact price 10.4506)
+
+| Method          | Price   | Std. error | 95% CI               |
+|-----------------|---------|------------|----------------------|
+| Standard        | 10.4205 | 0.0468     | [10.3289 ; 10.5122]  |
+| Antithetic      | 10.4673 | 0.0331     | [10.4025 ; 10.5321]  |
+| Control variate | 10.4668 | 0.0179     | [10.4318 ; 10.5019]  |
+
+**Put** (exact price 5.5735)
+
+| Method          | Price  | Std. error | 95% CI             |
+|-----------------|--------|------------|--------------------|
+| Standard        | 5.6122 | 0.0275     | [5.5583 ; 5.6661]  |
+| Antithetic      | 5.5797 | 0.0210     | [5.5384 ; 5.6209]  |
+| Control variate | 5.5898 | 0.0179     | [5.5548 ; 5.6248]  |
+
+The analytical price lies within every 95% confidence interval. For the call, the control variate divides the standard error by **2.6** — equivalent to running about **7× more simulations** at the same cost.
 
 ### Sensitivity Analysis
 
@@ -86,21 +108,28 @@ Monte Carlo error < 0.1% — consistent with the theoretical convergence rate of
 *Call and put prices as a function of the underlying spot price.*
 
 ![Delta vs Spot](delta_vs_spot.png)
-*Delta convergence : call delta → 1 deep in-the-money, → 0 deep out-of-the-money.*
+*Call delta → 1 deep in-the-money, → 0 deep out-of-the-money.*
 
 ![Price vs Volatility](price_vs_vol.png)
 *Both call and put prices increase with volatility — Vega is always positive.*
+
+### Limitations
+
+- **Constant volatility**: market implied volatility varies with strike and maturity (smile / skew); local or stochastic volatility models (e.g. Heston) address this.
+- **No jumps**: crashes create discontinuous moves not captured by a Brownian motion.
+- **Continuous, frictionless hedging**: in practice, delta hedging is discrete and incurs transaction costs.
+- **European exercise only**: American options require binomial trees or finite-difference methods.
 
 ---
 
 ## Project Structure
 
 ```
-black_scholes/
+black-scholes/
 ├── black_scholes.py   # Closed-form pricing + Greeks
-├── monte_carlo.py     # Monte Carlo simulation + confidence intervals
+├── monte_carlo.py     # Monte Carlo pricing: standard, antithetic, control variate
 ├── plots.py           # Sensitivity visualizations
-└── main.py            # Entry point — prints all results
+└── main.py            # Prices, parity check, Greeks validation, Monte Carlo comparison
 ```
 
 ---
@@ -111,7 +140,7 @@ black_scholes/
 # Install dependencies
 pip install numpy scipy matplotlib
 
-# Run pricing and Greeks
+# Run pricing, checks and Monte Carlo comparison
 python main.py
 
 # Generate sensitivity plots
